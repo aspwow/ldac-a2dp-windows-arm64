@@ -16,7 +16,7 @@
 
 ## 状态
 
-在 Windows 11 上配合 **JBL Live 780NC** 可正常工作且日常使用中。已在 VirtualBox 测试环境和一台 Intel 网卡的笔记本上测试：
+在 Windows 11 上配合 **QCC5125 DAC** 可正常工作且日常使用中。已在 VirtualBox 测试环境和一台 Intel 网卡的笔记本上测试：
 - 在 Driver Verifier 下进行一小时压力测试；
 - 睡眠（Modern Standby）以及串流中途关闭耳机；
 - 与 Alternative A2DP 的横向对比（`docs/real-machine.md`）。
