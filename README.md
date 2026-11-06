@@ -1,4 +1,4 @@
-# 面向 Windows 的 LDAC A2DP
+# 面向 Windows 的 LDAC A2DP 测试板
 
 一个开源的 Windows 蓝牙音频源（`BthA2dp`）替代实现，可将 **LDAC**（索尼的高解析度蓝牙编解码器，最高 990 kbit/s、96 kHz / 24 位）串流到耳机，并以 SBC 作为回退方案。
 
