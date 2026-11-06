@@ -1,0 +1,136 @@
+;
+; LdacA2dp.inf - A2DP source profile driver (LDAC / SBC) for selected Bluetooth sinks.
+;
+; Binds by full hardware ID (service UUID + DeviceID VID/PID), which outranks the
+; generic BTHENUM\{0000110b-...} match used by BthA2dp and Alternative A2DP.
+; The device is also the headphones' audio endpoint (ACX render circuit
+; "Headphones0"), so it lives in the MEDIA class like Alternative A2DP.
+; Test machines only until the driver is signed: requires "bcdedit /set testsigning on".
+;
+
+[Version]
+Signature   = "$WINDOWS NT$"
+Class       = MEDIA
+ClassGuid   = {4d36e96c-e325-11ce-bfc1-08002be10318}
+Provider    = %ManufacturerName%
+CatalogFile = LdacA2dp.cat
+DriverVer   =
+PnpLockdown = 1
+
+[DestinationDirs]
+DefaultDestDir = 13
+
+[SourceDisksNames]
+1 = %DiskName%,,,""
+
+[SourceDisksFiles]
+LdacA2dp.sys = 1,,
+
+[Manufacturer]
+%ManufacturerName% = LdacA2dp,NT$ARCH$.10.0...22621
+
+[LdacA2dp.NT$ARCH$.10.0...22621]
+; JBL Live 780NC (LDAC-5125)
+%LdacA2dp.DeviceDesc% = LdacA2dp_Device, BTHENUM\{0000110b-0000-1000-8000-00805f9b34fb}
+; ...its AVRCP: remote control (AVCTP, buttons, absolute volume) and the target
+; record, which only needs to be kept away from the inbox AvrcpTransport
+%LdacA2dp.AvrcpDesc% = LdacA2dp_Avrcp, BTHENUM\{0000110e-0000-1000-8000-00805f9b34fb}
+%LdacA2dp.IdleDesc%  = LdacA2dp_Idle,  BTHENUM\{0000110c-0000-1000-8000-00805f9b34fb}
+; second supported headset: reports VID 0x000A / PID 0xFFFF over the Device Information profile
+; (A2DP / AVRCP remote control / AVRCP target, same driver)
+%LdacA2dp.DeviceDesc% = LdacA2dp_Device, BTHENUM\{0000110b-0000-1000-8000-00805f9b34fb}_VID&0001000a_PID&ffff
+%LdacA2dp.AvrcpDesc%  = LdacA2dp_Avrcp,  BTHENUM\{0000110e-0000-1000-8000-00805f9b34fb}_VID&0001000a_PID&ffff
+%LdacA2dp.IdleDesc%   = LdacA2dp_Idle,   BTHENUM\{0000110c-0000-1000-8000-00805f9b34fb}_VID&0001000a_PID&ffff
+; this A2DP node ALSO enumerates "..._LOCALMFG&08e7" (the LOCAL adapter's vendor code). It is
+; deliberately NOT added: every headset paired through this adapter carries that ID, so the driver
+; would claim them all (and non-LDAC ones would fall to SBC at best). Only enable this fallback if
+; the VID/PID lines above ever fail to bind on this exact unit:
+;%LdacA2dp.DeviceDesc% = LdacA2dp_Device, BTHENUM\{0000110b-0000-1000-8000-00805f9b34fb}_LOCALMFG&08e7
+
+[LdacA2dp_Device.NT]
+CopyFiles = LdacA2dp_CopyFiles
+
+[LdacA2dp_CopyFiles]
+LdacA2dp.sys
+
+[LdacA2dp_Device.NT.Services]
+AddService = LdacA2dp, 0x00000002, LdacA2dp_Service
+
+[LdacA2dp_Service]
+DisplayName   = %LdacA2dp.SvcDesc%
+ServiceType   = 1               ; SERVICE_KERNEL_DRIVER
+StartType     = 3               ; SERVICE_DEMAND_START
+ErrorControl  = 1               ; SERVICE_ERROR_NORMAL
+ServiceBinary = %13%\LdacA2dp.sys
+
+[LdacA2dp_Device.NT.Wdf]
+KmdfService = LdacA2dp, LdacA2dp_wdfsect
+
+[LdacA2dp_wdfsect]
+KmdfLibraryVersion = $KMDFVERSION$
+
+; ---- AVRCP: same driver, buttons through a VHF consumer-control HID device ----
+
+[LdacA2dp_Avrcp.NT]
+CopyFiles = LdacA2dp_CopyFiles
+
+[LdacA2dp_Avrcp.NT.HW]
+AddReg = LdacA2dp_Avrcp.HW.AddReg
+
+[LdacA2dp_Avrcp.HW.AddReg]
+; vhf.sys (inbox, hidvhf.inf preconfigures the service) under our FDO
+HKR,,"LowerFilters",0x00010000,"vhf"
+
+[LdacA2dp_Avrcp.NT.Services]
+AddService = LdacA2dp, 0x00000002, LdacA2dp_Service
+
+[LdacA2dp_Avrcp.NT.Wdf]
+KmdfService = LdacA2dp, LdacA2dp_wdfsect
+
+[LdacA2dp_Idle.NT]
+CopyFiles = LdacA2dp_CopyFiles
+
+[LdacA2dp_Idle.NT.Services]
+AddService = LdacA2dp, 0x00000002, LdacA2dp_Service
+
+[LdacA2dp_Idle.NT.Wdf]
+KmdfService = LdacA2dp, LdacA2dp_wdfsect
+
+; ---- audio endpoint: render interfaces of the ACX circuit "Headphones0" ----
+
+[LdacA2dp_Device.NT.Interfaces]
+AddInterface = %KSCATEGORY_AUDIO%,    %KSNAME_Headphones%, LdacA2dp_Headphones
+AddInterface = %KSCATEGORY_RENDER%,   %KSNAME_Headphones%, LdacA2dp_Headphones
+AddInterface = %KSCATEGORY_REALTIME%, %KSNAME_Headphones%, LdacA2dp_Headphones
+
+[LdacA2dp_Headphones]
+AddReg = LdacA2dp_Headphones.AddReg
+
+[LdacA2dp_Headphones.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%LdacA2dp.Headphones.szPname%
+; event-driven (pull) mode for the audio engine
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
+; a new endpoint starts at -20 dB (~25 %), not at full volume: the level goes to the headphones
+HKR,EP\0,%PKEY_AudioEndpoint_Default_VolumeInDb%,0x00010001,0xFFEC0000
+
+[Strings]
+; non-localizable
+KSNAME_Headphones   = "Headphones0"
+Proxy.CLSID         = "{17CCA71B-ECD7-11D0-B908-00A0C9223196}"
+KSCATEGORY_AUDIO    = "{6994AD04-93EF-11D0-A3CC-00A0C9223196}"
+KSCATEGORY_RENDER   = "{65E8773E-8F56-11D0-A3B9-00A0C9223196}"
+KSCATEGORY_REALTIME = "{EB115FFC-10C8-4964-831D-6DCB02E6F23F}"
+KSNODETYPE_ANY      = "{00000000-0000-0000-0000-000000000000}"
+PKEY_AudioEndpoint_Association               = "{1DA5D803-D492-4EDD-8C23-E0C0FFEE7F0E},2"
+PKEY_AudioEndpoint_Supports_EventDriven_Mode = "{1DA5D803-D492-4EDD-8C23-E0C0FFEE7F0E},7"
+PKEY_AudioEndpoint_Default_VolumeInDb        = "{1DA5D803-D492-4EDD-8C23-E0C0FFEE7F0E},9"
+
+ManufacturerName     = "LDAC A2DP Project"
+DiskName             = "LDAC A2DP Installation Disk"
+LdacA2dp.DeviceDesc  = "LDAC A2DP Source"
+LdacA2dp.SvcDesc     = "LDAC A2DP Source Profile Driver"
+LdacA2dp.AvrcpDesc   = "LDAC A2DP Remote Control"
+LdacA2dp.IdleDesc    = "LDAC A2DP Remote Control Target"
+LdacA2dp.Headphones.szPname = "LDAC A2DP"
